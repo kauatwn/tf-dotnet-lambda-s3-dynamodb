@@ -1,0 +1,6 @@
+<Solution>
+  <Folder Name="/infra/" />
+  <Folder Name="/src/">
+    <Project Path="src/ImageProcessor.Lambda/ImageProcessor.Lambda.csproj" />
+  </Folder>
+</Solution>
