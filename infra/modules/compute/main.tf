@@ -4,12 +4,12 @@ locals {
   dotnet_rid = var.lambda_architecture == "arm64" ? "linux-arm64" : "linux-x64"
 
   # Centralized path for the Lambda ZIP
-  lambda_zip_path = "${path.module}/../src/ImageProcessor.Lambda/bin/Release/net10.0/${local.dotnet_rid}/publish/ImageProcessor.Lambda.zip"
+  lambda_zip_path = "${path.module}/../../../src/ImageProcessor.Lambda/bin/Release/net10.0/${local.dotnet_rid}/publish/ImageProcessor.Lambda.zip"
 
   # Deterministic hash based on source files (avoids non-deterministic ZIP hashes)
   source_hash = base64sha256(join("", [
-    for f in fileset("${path.module}/../src/ImageProcessor.Lambda", "**/*.{cs,csproj}") :
-    filesha1("${path.module}/../src/ImageProcessor.Lambda/${f}")
+    for f in fileset("${path.module}/../../../src/ImageProcessor.Lambda", "**/*.{cs,csproj}") :
+    filesha1("${path.module}/../../../src/ImageProcessor.Lambda/${f}")
   ]))
 }
 
@@ -61,14 +61,14 @@ resource "aws_iam_role_policy" "lambda_permissions" {
         Action = [
           "s3:PutObject"
         ]
-        Resource = "${aws_s3_bucket.image_bucket.arn}/*"
+        Resource = "${var.bucket_arn}/*"
       },
       {
         Effect = "Allow"
         Action = [
           "dynamodb:PutItem"
         ]
-        Resource = aws_dynamodb_table.image_metadata_table.arn
+        Resource = var.dynamodb_table_arn
       }
     ]
   })
@@ -80,15 +80,15 @@ resource "terraform_data" "lambda_build" {
   triggers_replace = {
     # Rebuilds whenever any .cs or .csproj file changes
     source_hash = sha1(join("", [
-      for f in fileset("${path.module}/../src/ImageProcessor.Lambda", "**/*.cs") :
-      filesha1("${path.module}/../src/ImageProcessor.Lambda/${f}")
+      for f in fileset("${path.module}/../../../src/ImageProcessor.Lambda", "**/*.cs") :
+      filesha1("${path.module}/../../../src/ImageProcessor.Lambda/${f}")
     ]))
-    csproj_hash = filesha1("${path.module}/../src/ImageProcessor.Lambda/ImageProcessor.Lambda.csproj")
+    csproj_hash = filesha1("${path.module}/../../../src/ImageProcessor.Lambda/ImageProcessor.Lambda.csproj")
   }
 
   provisioner "local-exec" {
     command     = "dotnet lambda package --configuration Release --framework net10.0 --function-architecture ${var.lambda_architecture} --output-package bin/Release/net10.0/${local.dotnet_rid}/publish/ImageProcessor.Lambda.zip"
-    working_dir = "${path.module}/../src/ImageProcessor.Lambda"
+    working_dir = "${path.module}/../../../src/ImageProcessor.Lambda"
   }
 }
 
@@ -107,8 +107,8 @@ resource "aws_lambda_function" "image_processor_lambda" {
   # Environment variables read by the C# application
   environment {
     variables = {
-      BUCKET_NAME = aws_s3_bucket.image_bucket.bucket
-      TABLE_NAME  = aws_dynamodb_table.image_metadata_table.name
+      BUCKET_NAME = var.bucket_name
+      TABLE_NAME  = var.dynamodb_table_name
     }
   }
 
