@@ -1,61 +1,117 @@
+using System.Net;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using Amazon.DynamoDBv2;
+using Amazon.Lambda.APIGatewayEvents;
 using Amazon.Lambda.Core;
 using Amazon.Lambda.RuntimeSupport;
 using Amazon.Lambda.Serialization.SystemTextJson;
-using System.Text.Json.Serialization;
+using Amazon.S3;
+using ImageProcessor.Lambda.Core;
+using ImageProcessor.Lambda.DTOs;
+using ImageProcessor.Lambda.Infrastructure;
+using ImageProcessor.Lambda.Models;
+using Microsoft.Extensions.Logging;
+using LogLevel = Microsoft.Extensions.Logging.LogLevel;
 
 namespace ImageProcessor.Lambda;
 
-public class Function
+public partial class Function
 {
-    /// <summary>
-    /// The main entry point for the Lambda function. The main function is called once during the Lambda init phase. It
-    /// initializes the .NET Lambda runtime client passing in the function handler to invoke for each Lambda event and
-    /// the JSON serializer to use for converting Lambda JSON format to the .NET types. 
-    /// </summary>
+    private static readonly S3Storage Storage = new(new AmazonS3Client());
+    private static readonly DynamoDbRepository Repository = new(new AmazonDynamoDBClient());
+    private static readonly ProcessImageUseCase ProcessImageUseCase = new(Storage, Repository);
+
+    private static ILogger<Function>? _logger;
+
     private static async Task Main()
     {
-        Func<string, ILambdaContext, string> handler = FunctionHandler;
+        using ILoggerFactory loggerFactory = LoggerFactory.Create(builder => builder.AddLambdaLogger());
+        _logger = loggerFactory.CreateLogger<Function>();
+
+        Func<APIGatewayProxyRequest, ILambdaContext, Task<APIGatewayProxyResponse>> handler = FunctionHandler;
+
         await LambdaBootstrapBuilder.Create(handler,
                 new SourceGeneratorLambdaJsonSerializer<LambdaFunctionJsonSerializerContext>())
             .Build()
             .RunAsync();
     }
 
-    /// <summary>
-    /// A simple function that takes a string and does a ToUpper.
-    ///
-    /// To use this handler to respond to an AWS event, reference the appropriate package from 
-    /// https://github.com/aws/aws-lambda-dotnet#events
-    /// and change the string input parameter to the desired event type. When the event type
-    /// is changed, the handler type registered in the main method needs to be updated and the LambdaFunctionJsonSerializerContext 
-    /// defined below will need the JsonSerializable updated. If the return type and event type are different then the 
-    /// LambdaFunctionJsonSerializerContext must have two JsonSerializable attributes, one for each type.
-    ///
-    // When using Native AOT extra testing with the deployed Lambda functions is required to ensure
-    // the libraries used in the Lambda function work correctly with Native AOT. If a runtime 
-    // error occurs about missing types or methods the most likely solution will be to remove references to trim-unsafe 
-    // code or configure trimming options. This sample defaults to partial TrimMode because currently the AWS 
-    // SDK for .NET does not support trimming. This will result in a larger executable size, and still does not 
-    // guarantee runtime trimming errors won't be hit. 
-    /// </summary>
-    /// <param name="input">The event for the Lambda function handler to process.</param>
-    /// <param name="context">The ILambdaContext that provides methods for logging and describing the Lambda environment.</param>
-    /// <returns></returns>
-    public static string FunctionHandler(string input, ILambdaContext context)
+    private static async Task<APIGatewayProxyResponse> FunctionHandler(APIGatewayProxyRequest request, ILambdaContext context)
     {
-        return input.ToUpper();
+        LogReceivingRequest(_logger);
+
+        if (string.IsNullOrWhiteSpace(request.Body))
+        {
+            LogBadRequest(_logger, "Empty or null request body.");
+            ErrorResponse errorResponse = new("Request body cannot be empty or invalid.");
+
+            return new APIGatewayProxyResponse
+            {
+                StatusCode = (int)HttpStatusCode.BadRequest,
+                Body = JsonSerializer.Serialize(errorResponse, LambdaFunctionJsonSerializerContext.Default.ErrorResponse),
+                Headers = new Dictionary<string, string> { { "Content-Type", "application/json" } }
+            };
+        }
+
+        try
+        {
+            ImageUploadRequest? uploadRequest = JsonSerializer.Deserialize<ImageUploadRequest>(
+                request.Body,
+                LambdaFunctionJsonSerializerContext.Default.ImageUploadRequest);
+
+            if (uploadRequest == null || string.IsNullOrEmpty(uploadRequest.Base64Image))
+            {
+                LogBadRequest(_logger, "Invalid payload structure or missing Base64 image data.");
+                ErrorResponse errorResponse = new("Invalid payload or missing Base64 image data.");
+
+                return new APIGatewayProxyResponse
+                {
+                    StatusCode = (int)HttpStatusCode.BadRequest,
+                    Body = JsonSerializer.Serialize(errorResponse, LambdaFunctionJsonSerializerContext.Default.ErrorResponse),
+                    Headers = new Dictionary<string, string> { { "Content-Type", "application/json" } }
+                };
+            }
+
+            ImageMetadata resultMetadata = await ProcessImageUseCase.ExecuteAsync(uploadRequest);
+            SuccessResponse<ImageMetadata> successResponse = new("Image processed successfully!", resultMetadata);
+
+            return new APIGatewayProxyResponse
+            {
+                StatusCode = (int)HttpStatusCode.OK,
+                Body = JsonSerializer.Serialize(successResponse, LambdaFunctionJsonSerializerContext.Default.SuccessResponseImageMetadata),
+                Headers = new Dictionary<string, string> { { "Content-Type", "application/json" } }
+            };
+        }
+        catch (Exception ex)
+        {
+            LogCriticalError(_logger, ex.Message, ex);
+            ErrorResponse errorResponse = new("Internal server error during image processing.");
+
+            return new APIGatewayProxyResponse
+            {
+                StatusCode = (int)HttpStatusCode.InternalServerError,
+                Body = JsonSerializer.Serialize(errorResponse, LambdaFunctionJsonSerializerContext.Default.ErrorResponse),
+                Headers = new Dictionary<string, string> { { "Content-Type", "application/json" } }
+            };
+        }
     }
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Receiving HTTP request from API Gateway.")]
+    static partial void LogReceivingRequest(ILogger? logger);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Bad Request: {Reason}")]
+    static partial void LogBadRequest(ILogger? logger, string reason);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "A critical error occurred while processing the image. Error: {ErrorMessage}")]
+    static partial void LogCriticalError(ILogger? logger, string errorMessage, Exception ex);
 }
 
-/// <summary>
-/// This class is used to register the input event and return type for the FunctionHandler method with the System.Text.Json source generator.
-/// There must be a JsonSerializable attribute for each type used as the input and return type or a runtime error will occur 
-/// from the JSON serializer unable to find the serialization information for unknown types.
-/// </summary>
-[JsonSerializable(typeof(string))]
-public partial class LambdaFunctionJsonSerializerContext : JsonSerializerContext
-{
-    // By using this partial class derived from JsonSerializerContext, we can generate reflection free JSON Serializer code at compile time
-    // which can deserialize our class and properties. However, we must attribute this class to tell it what types to generate serialization code for.
-    // See https://docs.microsoft.com/en-us/dotnet/standard/serialization/system-text-json-source-generation
-}
+[JsonSerializable(typeof(APIGatewayProxyRequest))]
+[JsonSerializable(typeof(APIGatewayProxyResponse))]
+[JsonSerializable(typeof(Dictionary<string, string>))]
+[JsonSerializable(typeof(ImageUploadRequest))]
+[JsonSerializable(typeof(ImageMetadata))]
+[JsonSerializable(typeof(ErrorResponse))]
+[JsonSerializable(typeof(SuccessResponse<ImageMetadata>))]
+public partial class LambdaFunctionJsonSerializerContext : JsonSerializerContext;
