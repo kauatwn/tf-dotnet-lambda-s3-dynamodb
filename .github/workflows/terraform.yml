@@ -1,0 +1,59 @@
+name: Serverless CI - LocalStack Integration
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Start LocalStack
+        run: |
+          docker run -d -p 4566:4566 -p 4510-4559:4510-4559 \
+            -e AWS_DEFAULT_REGION=us-east-1 \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            --name localstack localstack/localstack:latest        
+          echo "Waiting for LocalStack to start..."
+          sleep 15
+
+      - name: Setup .NET and Lambda Tools
+        run: |
+          dotnet tool install -g Amazon.Lambda.Tools
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform Init
+        run: terraform init
+        working-directory: infra
+
+      - name: Terraform Apply
+        run: terraform apply -auto-approve
+        working-directory: infra
+
+      - name: Run E2E Integration Test
+        run: |
+          API_URL=$(terraform output -raw api_url)
+          echo "Generated Endpoint: $API_URL"
+
+          RESPONSE=$(curl -s -X POST "$API_URL" \
+            -H "Content-Type: application/json" \
+            -d '{"FileName": "github_action.png", "ContentType": "image/png", "Base64Image": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII="}')
+
+          echo "API Response: $RESPONSE"
+
+          if [[ "$RESPONSE" == *"ImageId"* ]]; then
+            echo "SUCCESS: Lambda processed the image and saved metadata."
+            exit 0
+          else
+            echo "FAILURE: API did not return the expected result."
+            exit 1
+          fi
+        working-directory: infra
