@@ -9,13 +9,15 @@ on:
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
+    env:
+      LOCALSTACK_ENDPOINT: "http://127.0.0.1:4566"
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - name: Start LocalStack
-        uses: LocalStack/setup-localstack@v0.2.3
+        uses: LocalStack/setup-localstack@7c8a0cb3405bc58be4c8f763f812aa000bc46303 # v0.3.2
         with:
           image-tag: "latest"
           install-awslocal: "true"
@@ -27,18 +29,18 @@ jobs:
           dotnet tool install -g Amazon.Lambda.Tools
 
       - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
 
       - name: Terraform Init
         run: terraform init -upgrade
-        working-directory: infra
+        working-directory: infra/environments/dev
 
       - name: Terraform Apply
         run: |
           terraform apply -auto-approve \
-            -var="localstack_endpoint=http://127.0.0.1:4566" \
+            -var="localstack_endpoint=${{ env.LOCALSTACK_ENDPOINT }}" \
             -var="lambda_architecture=x86_64"
-        working-directory: infra
+        working-directory: infra/environments/dev
 
       - name: Run E2E Integration Test
         run: |
@@ -50,7 +52,7 @@ jobs:
 
           # Construct the internal URL format recognized by LocalStack
           # Format: http://127.0.0.1:4566/restapis/<api_id>/<stage>/_user_request_/<path>
-          LOCALSTACK_URL="http://127.0.0.1:4566/restapis/$API_ID/local/_user_request_/images"
+          LOCALSTACK_URL="$LOCALSTACK_ENDPOINT/restapis/$API_ID/local/_user_request_/images"
           echo "LocalStack URL: $LOCALSTACK_URL"
 
           # Trigger the request
@@ -67,7 +69,7 @@ jobs:
             echo "FAILURE: API did not return the expected result."
             exit 1
           fi
-        working-directory: infra
+        working-directory: infra/environments/dev
 
       - name: Show LocalStack logs
         if: always()
