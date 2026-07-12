@@ -15,26 +15,9 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Start LocalStack
-        run: |
-          docker run -d -p 4566:4566 -p 4510-4559:4510-4559 \
-            -e AWS_DEFAULT_REGION=us-east-1 \
-            -v /var/run/docker.sock:/var/run/docker.sock \
-            --name localstack localstack/localstack:latest
-
-      - name: Wait for LocalStack to be ready
-        run: |
-          echo "Waiting for LocalStack to be ready..."
-          for i in $(seq 1 30); do
-            if curl -s http://127.0.0.1:4566/_localstack/health | grep -q '"running'; then
-              echo "LocalStack is ready!"
-              exit 0
-            fi
-            echo "Attempt $i/30 - LocalStack not ready yet, waiting 5s..."
-            sleep 5
-          done
-          echo "ERROR: LocalStack failed to start within 150 seconds"
-          docker logs localstack
-          exit 1
+        uses: LocalStack/setup-localstack@v0.2.3
+        with:
+          image-tag: "latest"
 
       - name: Setup .NET and Lambda Tools
         run: |
