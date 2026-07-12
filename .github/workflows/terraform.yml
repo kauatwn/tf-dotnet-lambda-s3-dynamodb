@@ -19,9 +19,22 @@ jobs:
           docker run -d -p 4566:4566 -p 4510-4559:4510-4559 \
             -e AWS_DEFAULT_REGION=us-east-1 \
             -v /var/run/docker.sock:/var/run/docker.sock \
-            --name localstack localstack/localstack:latest        
-          echo "Waiting for LocalStack to start..."
-          sleep 15
+            --name localstack localstack/localstack:latest
+
+      - name: Wait for LocalStack to be ready
+        run: |
+          echo "Waiting for LocalStack to be ready..."
+          for i in $(seq 1 30); do
+            if curl -s http://127.0.0.1:4566/_localstack/health | grep -q '"running'; then
+              echo "LocalStack is ready!"
+              exit 0
+            fi
+            echo "Attempt $i/30 - LocalStack not ready yet, waiting 5s..."
+            sleep 5
+          done
+          echo "ERROR: LocalStack failed to start within 150 seconds"
+          docker logs localstack
+          exit 1
 
       - name: Setup .NET and Lambda Tools
         run: |
@@ -31,11 +44,14 @@ jobs:
         uses: hashicorp/setup-terraform@v3
 
       - name: Terraform Init
-        run: terraform init
+        run: terraform init -upgrade
         working-directory: infra
 
       - name: Terraform Apply
-        run: terraform apply -auto-approve
+        run: |
+          terraform apply -auto-approve \
+            -var="localstack_endpoint=http://127.0.0.1:4566" \
+            -var="lambda_architecture=x86_64"
         working-directory: infra
 
       - name: Run E2E Integration Test
