@@ -1,10 +1,25 @@
 <Solution>
-  <Folder Name="/infra/">
-    <File Path="infra\api_gateway.tf" />
-    <File Path="infra\lambda.tf" />
-    <File Path="infra\main.tf" />
-    <File Path="infra\providers.tf" />
-    <File Path="infra\variables.tf" />
+  <Folder Name="/infra/environments/" />
+  <Folder Name="/infra/environments/dev/">
+    <File Path="infra\environments\dev\main.tf" />
+    <File Path="infra\environments\dev\outputs.tf" />
+    <File Path="infra\environments\dev\providers.tf" />
+    <File Path="infra\environments\dev\variables.tf" />
+  </Folder>
+  <Folder Name="/infra/modules/" />
+  <Folder Name="/infra/modules/api/">
+    <File Path="infra\modules\api\main.tf" />
+    <File Path="infra\modules\api\outputs.tf" />
+    <File Path="infra\modules\api\variables.tf" />
+  </Folder>
+  <Folder Name="/infra/modules/compute/">
+    <File Path="infra\modules\compute\main.tf" />
+    <File Path="infra\modules\compute\outputs.tf" />
+    <File Path="infra\modules\compute\variables.tf" />
+  </Folder>
+  <Folder Name="/infra/modules/storage/">
+    <File Path="infra\modules\storage\main.tf" />
+    <File Path="infra\modules\storage\outputs.tf" />
   </Folder>
   <Folder Name="/src/">
     <Project Path="src/ImageProcessor.Lambda/ImageProcessor.Lambda.csproj" />
