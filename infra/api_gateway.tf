@@ -1,70 +1,56 @@
-# ------------------------------------------------------
-# 1. Criação do API Gateway (REST API)
-# ------------------------------------------------------
+# API Gateway (REST API)
 resource "aws_api_gateway_rest_api" "image_api" {
   name        = "ImageProcessorAPI"
-  description = "API REST Serverless para processamento de imagens"
+  description = "Serverless REST API for image processing"
 
   endpoint_configuration {
     types = ["REGIONAL"]
   }
 }
 
-# ------------------------------------------------------
-# 2. Rota/Recurso da API (Ex: /images)
-# ------------------------------------------------------
+# API Resource / Route (e.g., /images)
 resource "aws_api_gateway_resource" "images_resource" {
   rest_api_id = aws_api_gateway_rest_api.image_api.id
   parent_id   = aws_api_gateway_rest_api.image_api.root_resource_id
-  path_part   = "images" # Caminho da URL
+  path_part   = "images"
 }
 
-# ------------------------------------------------------
-# 3. Método HTTP (POST /images)
-# ------------------------------------------------------
+# HTTP Method (POST /images)
 resource "aws_api_gateway_method" "post_image_method" {
   rest_api_id   = aws_api_gateway_rest_api.image_api.id
   resource_id   = aws_api_gateway_resource.images_resource.id
   http_method   = "POST"
-  authorization = "NONE" # Pública para o laboratório local
+  authorization = "NONE" # Public for local lab
 }
 
-# ------------------------------------------------------
-# 4. Integração do API Gateway com a Lambda
-# ------------------------------------------------------
-# O tipo AWS_PROXY (Lambda Proxy Integration) faz com que o API Gateway
-# envie o payload HTTP bruto para a Lambda e adote a resposta da Lambda como resposta HTTP.
+# API Gateway to Lambda Integration
+# AWS_PROXY (Lambda Proxy Integration) sends the raw HTTP payload to Lambda
 resource "aws_api_gateway_integration" "api_lambda_integration" {
   rest_api_id             = aws_api_gateway_rest_api.image_api.id
   resource_id             = aws_api_gateway_resource.images_resource.id
   http_method             = aws_api_gateway_method.post_image_method.http_method
-  integration_http_method = "POST" # O API Gateway sempre chama a Lambda via POST internamente
+  integration_http_method = "POST"
   type                    = "AWS_PROXY"
   uri                     = aws_lambda_function.image_processor_lambda.invoke_arn
 }
 
-# ------------------------------------------------------
-# 5. Permissão de Invocação (Segurança/IAM)
-# ------------------------------------------------------
-# Essencial para exames: Recursos não se comunicam sem permissão explícita.
-# Aqui autorizamos o API Gateway a acionar a Lambda.
+# Invocation Permission (Security/IAM)
+# Grants API Gateway permission to invoke the Lambda function
 resource "aws_lambda_permission" "api_gateway_lambda_permission" {
   statement_id  = "AllowAPIGatewayInvoke"
   action        = "lambda:InvokeFunction"
   function_name = aws_lambda_function.image_processor_lambda.function_name
   principal     = "apigateway.amazonaws.com"
 
-  # O Source ARN restringe a permissão apenas para esta API específica
+  # Restricts permission only to this specific API
   source_arn = "${aws_api_gateway_rest_api.image_api.execution_arn}/*/*"
 }
 
-# ------------------------------------------------------
-# 6. Deployment e Stage da API
-# ------------------------------------------------------
+# API Deployment and Stage
 resource "aws_api_gateway_deployment" "api_deployment" {
   rest_api_id = aws_api_gateway_rest_api.image_api.id
 
-  # Garante que qualquer mudança de método ou integração force um novo deploy da API
+  # Triggers a new deployment on configuration changes
   triggers = {
     redeployment = sha1(jsonencode([
       aws_api_gateway_resource.images_resource.id,
@@ -72,6 +58,12 @@ resource "aws_api_gateway_deployment" "api_deployment" {
       aws_api_gateway_integration.api_lambda_integration.id,
     ]))
   }
+
+  # Ensures permissions are applied before deployment (Fixes race condition)
+  depends_on = [
+    aws_api_gateway_integration.api_lambda_integration,
+    aws_lambda_permission.api_gateway_lambda_permission
+  ]
 
   lifecycle {
     create_before_destroy = true
@@ -84,10 +76,8 @@ resource "aws_api_gateway_stage" "api_stage" {
   stage_name    = "local"
 }
 
-# ------------------------------------------------------
-# Output - URL de Entrada da API
-# ------------------------------------------------------
+# Output - API Entry URL
 output "api_url" {
   value       = "${aws_api_gateway_stage.api_stage.invoke_url}/${aws_api_gateway_resource.images_resource.path_part}"
-  description = "URL local gerada para enviar as imagens (POST)"
+  description = "Generated local URL to send images (POST)"
 }
