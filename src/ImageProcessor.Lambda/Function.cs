@@ -12,6 +12,7 @@ using ImageProcessor.Lambda.DTOs;
 using ImageProcessor.Lambda.Infrastructure;
 using ImageProcessor.Lambda.Models;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using LogLevel = Microsoft.Extensions.Logging.LogLevel;
 
 namespace ImageProcessor.Lambda;
@@ -22,7 +23,7 @@ public partial class Function
     private static readonly DynamoDbRepository Repository = new(new AmazonDynamoDBClient());
     private static readonly ProcessImageUseCase ProcessImageUseCase = new(Storage, Repository);
 
-    private static ILogger<Function>? _logger;
+    private static ILogger<Function> _logger = NullLogger<Function>.Instance;
 
     private static async Task Main()
     {
@@ -98,13 +99,13 @@ public partial class Function
     }
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Receiving HTTP request from API Gateway.")]
-    static partial void LogReceivingRequest(ILogger? logger);
+    static partial void LogReceivingRequest(ILogger logger);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Bad Request: {Reason}")]
-    static partial void LogBadRequest(ILogger? logger, string reason);
+    static partial void LogBadRequest(ILogger logger, string reason);
 
     [LoggerMessage(Level = LogLevel.Error, Message = "A critical error occurred while processing the image. Error: {ErrorMessage}")]
-    static partial void LogCriticalError(ILogger? logger, string errorMessage, Exception ex);
+    static partial void LogCriticalError(ILogger logger, string errorMessage, Exception ex);
 }
 
 [JsonSerializable(typeof(APIGatewayProxyRequest))]
