@@ -17,7 +17,10 @@ jobs:
       - name: Start LocalStack
         uses: LocalStack/setup-localstack@v0.2.3
         with:
-          image-tag: "latest"
+          image-tag: 'latest'
+          install-awslocal: 'true'
+        env:
+          LOCALSTACK_AUTH_TOKEN: ${{ secrets.LOCALSTACK_AUTH_TOKEN }}
 
       - name: Setup .NET and Lambda Tools
         run: |
@@ -56,3 +59,7 @@ jobs:
             exit 1
           fi
         working-directory: infra
+
+      - name: Show LocalStack logs
+        if: always()
+        run: localstack logs | tail -50
