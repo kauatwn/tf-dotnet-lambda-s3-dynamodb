@@ -4,10 +4,7 @@ terraform {
       source  = "hashicorp/aws"
       version = "~>6.54.0"
     }
-    null = {
-      source  = "hashicorp/null"
-      version = "~>3.2.0"
-    }
+    # The 'null' provider was removed as we are now using the native 'terraform_data'
   }
 }
 
@@ -16,9 +13,18 @@ provider "aws" {
   secret_key = "mock_secret_key"
   region     = "us-east-1"
 
-  # only required for non virtual hosted-style endpoint use case.
+  # Global tags applied automatically to all supported resources
+  default_tags {
+    tags = {
+      Environment = "Local"
+      Project     = "ImageProcessor"
+      ManagedBy   = "Terraform"
+    }
+  }
+
+  # Only required for non-virtual hosted-style endpoint use case
   # https://registry.terraform.io/providers/hashicorp/aws/latest/docs#s3_use_path_style
-  s3_use_path_style = true
+  s3_use_path_style           = true
   skip_credentials_validation = true
   skip_metadata_api_check     = true
   skip_requesting_account_id  = true
