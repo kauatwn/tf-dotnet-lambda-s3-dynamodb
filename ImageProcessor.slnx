@@ -1,5 +1,6 @@
 <Solution>
   <Folder Name="/infra/">
+    <File Path="infra\api_gateway.tf" />
     <File Path="infra\lambda.tf" />
     <File Path="infra\main.tf" />
     <File Path="infra\providers.tf" />
