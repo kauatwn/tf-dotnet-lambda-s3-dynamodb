@@ -25,4 +25,8 @@
   <Folder Name="/src/">
     <Project Path="src/ImageProcessor.Lambda/ImageProcessor.Lambda.csproj" />
   </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/ImageProcessor.IntegrationTests/ImageProcessor.IntegrationTests.csproj" />
+    <Project Path="tests/ImageProcessor.UnitTests/ImageProcessor.UnitTests.csproj" />
+  </Folder>
 </Solution>
