@@ -1,101 +1,78 @@
 using System.Net;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using Amazon.DynamoDBv2;
+using System.Text.Json.Serialization.Metadata;
 using Amazon.Lambda.APIGatewayEvents;
 using Amazon.Lambda.Core;
 using Amazon.Lambda.RuntimeSupport;
 using Amazon.Lambda.Serialization.SystemTextJson;
-using Amazon.S3;
 using ImageProcessor.Lambda.Core;
 using ImageProcessor.Lambda.DTOs;
 using ImageProcessor.Lambda.Infrastructure;
 using ImageProcessor.Lambda.Models;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Abstractions;
 using LogLevel = Microsoft.Extensions.Logging.LogLevel;
 
 namespace ImageProcessor.Lambda;
 
-public partial class Function
+public partial class Function(ILogger<Function> logger, ProcessImageUseCase processImageUseCase)
 {
-    private static readonly S3Storage Storage = new(new AmazonS3Client());
-    private static readonly DynamoDbRepository Repository = new(new AmazonDynamoDBClient());
-    private static readonly ProcessImageUseCase ProcessImageUseCase = new(Storage, Repository);
+    private static readonly Dictionary<string, string> JsonHeaders = new() { { "Content-Type", "application/json" } };
 
-    private static ILogger<Function> _logger = NullLogger<Function>.Instance;
-
-    private static async Task Main()
+    public static async Task Main()
     {
-        using ILoggerFactory loggerFactory = LoggerFactory.Create(builder => builder.AddLambdaLogger());
-        _logger = loggerFactory.CreateLogger<Function>();
+        ServiceCollection services = new();
+        services.AddInfrastructure();
 
-        Func<APIGatewayProxyRequest, ILambdaContext, Task<APIGatewayProxyResponse>> handler = FunctionHandler;
+        ServiceProvider sp = services.BuildServiceProvider();
+        Func<APIGatewayProxyRequest, ILambdaContext, Task<APIGatewayProxyResponse>> handler = sp.GetRequiredService<Function>().FunctionHandler;
 
-        await LambdaBootstrapBuilder.Create(handler,
-                new SourceGeneratorLambdaJsonSerializer<LambdaFunctionJsonSerializerContext>())
+        await LambdaBootstrapBuilder.Create(handler, new SourceGeneratorLambdaJsonSerializer<LambdaFunctionJsonSerializerContext>())
             .Build()
             .RunAsync();
     }
 
-    private static async Task<APIGatewayProxyResponse> FunctionHandler(APIGatewayProxyRequest request, ILambdaContext context)
+    public async Task<APIGatewayProxyResponse> FunctionHandler(APIGatewayProxyRequest request, ILambdaContext context)
     {
-        LogReceivingRequest(_logger);
+        LogReceivingRequest(logger);
 
         if (string.IsNullOrWhiteSpace(request.Body))
         {
-            LogBadRequest(_logger, "Empty or null request body.");
-            ErrorResponse errorResponse = new("Request body cannot be empty or invalid.");
-
-            return new APIGatewayProxyResponse
-            {
-                StatusCode = (int)HttpStatusCode.BadRequest,
-                Body = JsonSerializer.Serialize(errorResponse, LambdaFunctionJsonSerializerContext.Default.ErrorResponse),
-                Headers = new Dictionary<string, string> { { "Content-Type", "application/json" } }
-            };
+            LogBadRequest(logger, "Empty or null request body.");
+            return CreateResponse(HttpStatusCode.BadRequest, new ErrorResponse("Request body cannot be empty or invalid."), LambdaFunctionJsonSerializerContext.Default.ErrorResponse);
         }
 
         try
         {
-            ImageUploadRequest? uploadRequest = JsonSerializer.Deserialize<ImageUploadRequest>(
-                request.Body,
-                LambdaFunctionJsonSerializerContext.Default.ImageUploadRequest);
+            ImageUploadRequest? uploadRequest = JsonSerializer.Deserialize<ImageUploadRequest>(request.Body, LambdaFunctionJsonSerializerContext.Default.ImageUploadRequest);
 
             if (uploadRequest == null || string.IsNullOrEmpty(uploadRequest.Base64Image))
             {
-                LogBadRequest(_logger, "Invalid payload structure or missing Base64 image data.");
-                ErrorResponse errorResponse = new("Invalid payload or missing Base64 image data.");
-
-                return new APIGatewayProxyResponse
-                {
-                    StatusCode = (int)HttpStatusCode.BadRequest,
-                    Body = JsonSerializer.Serialize(errorResponse, LambdaFunctionJsonSerializerContext.Default.ErrorResponse),
-                    Headers = new Dictionary<string, string> { { "Content-Type", "application/json" } }
-                };
+                LogBadRequest(logger, "Invalid payload structure or missing Base64 image data.");
+                return CreateResponse(HttpStatusCode.BadRequest, new ErrorResponse("Invalid payload or missing Base64 image data."), LambdaFunctionJsonSerializerContext.Default.ErrorResponse);
             }
 
-            ImageMetadata resultMetadata = await ProcessImageUseCase.ExecuteAsync(uploadRequest);
+            ImageMetadata resultMetadata = await processImageUseCase.ExecuteAsync(uploadRequest);
             SuccessResponse<ImageMetadata> successResponse = new("Image processed successfully!", resultMetadata);
 
-            return new APIGatewayProxyResponse
-            {
-                StatusCode = (int)HttpStatusCode.OK,
-                Body = JsonSerializer.Serialize(successResponse, LambdaFunctionJsonSerializerContext.Default.SuccessResponseImageMetadata),
-                Headers = new Dictionary<string, string> { { "Content-Type", "application/json" } }
-            };
+            return CreateResponse(HttpStatusCode.OK, successResponse, LambdaFunctionJsonSerializerContext.Default.SuccessResponseImageMetadata);
         }
         catch (Exception ex)
         {
-            LogCriticalError(_logger, ex.Message, ex);
-            ErrorResponse errorResponse = new("Internal server error during image processing.");
-
-            return new APIGatewayProxyResponse
-            {
-                StatusCode = (int)HttpStatusCode.InternalServerError,
-                Body = JsonSerializer.Serialize(errorResponse, LambdaFunctionJsonSerializerContext.Default.ErrorResponse),
-                Headers = new Dictionary<string, string> { { "Content-Type", "application/json" } }
-            };
+            LogCriticalError(logger, ex.Message, ex);
+            return CreateResponse(HttpStatusCode.InternalServerError, new ErrorResponse("Internal server error during image processing."), LambdaFunctionJsonSerializerContext.Default.ErrorResponse);
         }
+    }
+
+    private static APIGatewayProxyResponse CreateResponse<T>(HttpStatusCode statusCode, T body, JsonTypeInfo<T> jsonTypeInfo)
+    {
+        return new APIGatewayProxyResponse
+        {
+            StatusCode = (int)statusCode,
+            Body = JsonSerializer.Serialize(body, jsonTypeInfo),
+            Headers = JsonHeaders
+        };
     }
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Receiving HTTP request from API Gateway.")]
