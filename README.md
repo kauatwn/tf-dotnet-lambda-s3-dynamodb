@@ -10,7 +10,7 @@ The primary focus of this application is not on complex business logic, but rath
 - [How to Run](#how-to-run)
 - [Project Structure](#project-structure)
 - [Architecture & Design Principles](#architecture--design-principles)
-- [Known Limitations & Pragmatic Trade-offs](#known-limitations--pragmatic-trade-offs)
+- [Known Limitations & Pragmatic Trade-offs](#4-known-limitations--pragmatic-trade-offs)
 
 ## Prerequisites
 
@@ -52,22 +52,32 @@ This command downloads the required providers and sets up the local backend stat
 terraform init
 ```
 
-### 5. Provision the Infrastructure
+### 5. Plan the Infrastructure
 
-Apply the configuration to automatically compile the C# Native AOT binary and provision all local cloud resources.
+Before applying, it is a best practice to review the execution plan to see exactly what Terraform will provision. We output this plan to a file to ensure predictable deployments.
 
 ```bash
-terraform apply -auto-approve
+terraform plan -out=tfplan
+
+```
+
+### 6. Provision the Infrastructure
+
+Apply the generated execution plan. This step will also automatically compile the C# Native AOT binary and provision all local cloud resources.
+
+```bash
+terraform apply tfplan
+
 ```
 
 > [!TIP]
-> Terraform will output the dynamically generated `api_url` at the end of the process. Because LocalStack perfectly mocks AWS APIs, deploying this to a real AWS production environment requires zero C# code changes — only an update to the Terraform provider credentials.
+> Terraform will output both the dynamically generated `api_url` and `api_id` at the end of the process. Because LocalStack perfectly mocks AWS APIs, deploying this to a real AWS production environment requires zero C# code changes — only an update to the Terraform provider credentials.
 
-### 6. Simulating an Upload
+### 7. Simulating an Upload
 
 Perform a `POST` request to the API to upload an image. The payload must be a JSON object containing the file metadata and the image encoded in Base64.
 
-- **Endpoint:** Use the `api_url` provided by the Terraform output.
+- **Endpoint:** Use the format `http://127.0.0.1:4566/_aws/execute-api/<api-id>/local/images` (replace `<api-id>` with the ID outputted by Terraform).
 - **Headers:** `Content-Type: application/json`
 - **Body:**
 
@@ -93,13 +103,15 @@ tf-dotnet-lambda-s3-dynamodb/
 │       ├── api/                  # API Gateway resources
 │       ├── compute/              # Lambda, IAM Roles, and Policies
 │       └── storage/              # S3 and DynamoDB
-└── src/ImageProcessor.Lambda/
-    ├── Core/                     # Interfaces and Use Cases
-    ├── DTOs/                     # Request/Response contracts
-    ├── Infrastructure/           # AWS SDK implementations (Adapters)
-    ├── Models/                   # Domain entities
-    └── Function.cs               # Lambda Entrypoint
-
+├── src/ImageProcessor.Lambda/
+│   ├── Core/                     # Interfaces and Use Cases
+│   ├── DTOs/                     # Request/Response contracts
+│   ├── Infrastructure/           # AWS SDK implementations (Adapters)
+│   ├── Models/                   # Domain entities
+│   └── Function.cs               # Lambda Entrypoint
+└── tests/
+    ├── ImageProcessor.UnitTests/         # Isolated Domain and Use Case tests via Moq
+    └── ImageProcessor.IntegrationTests/  # End-to-end Handler and DB testing via Testcontainers
 ```
 
 ## Architecture & Design Principles
@@ -132,7 +144,7 @@ The project includes a mature **GitHub Actions** pipeline designed for complete 
 2. Executes `terraform apply` to compile the C# Native AOT binary (overriding architecture variables to ensure Linux x86_64 compatibility) and creates all simulated AWS resources.
 3. Parses the dynamic API Gateway URL and executes a real HTTP `cURL` request to validate the entire integration flow (API -> Lambda -> S3 & DynamoDB).
 
-## Known Limitations & Pragmatic Trade-offs
+### 4. Known Limitations & Pragmatic Trade-offs
 
 This project is an engineering case study focused on synchronous APIs. It introduces specific pragmatic trade-offs that must be evaluated for enterprise-grade production:
 
