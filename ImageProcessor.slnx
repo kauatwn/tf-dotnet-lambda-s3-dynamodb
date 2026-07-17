@@ -1,4 +1,5 @@
 <Solution>
+  <Folder Name="/infra/" />
   <Folder Name="/infra/environments/" />
   <Folder Name="/infra/environments/dev/">
     <File Path="infra\environments\dev\main.tf" />
