@@ -29,12 +29,12 @@ provider "aws" {
   skip_requesting_account_id  = true
 
   endpoints {
-    s3         = var.localstack_endpoint
-    dynamodb   = var.localstack_endpoint
-    apigateway = var.localstack_endpoint
+    s3             = var.localstack_endpoint
+    dynamodb       = var.localstack_endpoint
+    apigateway     = var.localstack_endpoint
     cloudwatchlogs = var.localstack_endpoint
-    lambda     = var.localstack_endpoint
-    iam        = var.localstack_endpoint
-    sts        = var.localstack_endpoint
+    lambda         = var.localstack_endpoint
+    iam            = var.localstack_endpoint
+    sts            = var.localstack_endpoint
   }
 }
