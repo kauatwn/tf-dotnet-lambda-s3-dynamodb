@@ -11,6 +11,6 @@
   "function-runtime": "dotnet10",
   "function-memory-size": 512,
   "function-timeout": 30,
-  "function-handler": "ImageProcessor.Lambda",
+  "function-handler": "ImageProcessor.Lambda.UploadImage",
   "msbuild-parameters": "--self-contained true"
 }
