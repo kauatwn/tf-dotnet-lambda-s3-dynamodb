@@ -25,7 +25,7 @@
   <Folder Name="/src/">
     <Project Path="src/ImageProcessor.Core/ImageProcessor.Core.csproj" />
     <Project Path="src/ImageProcessor.Infrastructure/ImageProcessor.Infrastructure.csproj" />
-    <Project Path="src/ImageProcessor.Lambda/ImageProcessor.Lambda.csproj" />
+    <Project Path="src/ImageProcessor.Lambda.UploadImage/ImageProcessor.Lambda.UploadImage.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/ImageProcessor.IntegrationTests/ImageProcessor.IntegrationTests.csproj" />

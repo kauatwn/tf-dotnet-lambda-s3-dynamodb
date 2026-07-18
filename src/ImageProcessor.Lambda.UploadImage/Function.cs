@@ -6,24 +6,29 @@ using Amazon.Lambda.APIGatewayEvents;
 using Amazon.Lambda.Core;
 using Amazon.Lambda.RuntimeSupport;
 using Amazon.Lambda.Serialization.SystemTextJson;
-using ImageProcessor.Lambda.Core;
-using ImageProcessor.Lambda.DTOs;
-using ImageProcessor.Lambda.Infrastructure;
-using ImageProcessor.Lambda.Models;
+using ImageProcessor.Core.Models;
+using ImageProcessor.Core.UseCases;
+using ImageProcessor.Infrastructure.Extensions;
+using ImageProcessor.Lambda.UploadImage.Contracts;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using LogLevel = Microsoft.Extensions.Logging.LogLevel;
 
-namespace ImageProcessor.Lambda;
+namespace ImageProcessor.Lambda.UploadImage;
 
-public partial class Function(ILogger<Function> logger, ProcessImageUseCase processImageUseCase)
+public partial class Function(ILogger<Function> logger, UploadImageUseCase uploadImageUseCase)
 {
     private static readonly Dictionary<string, string> JsonHeaders = new() { { "Content-Type", "application/json" } };
 
     public static async Task Main()
     {
         ServiceCollection services = new();
+        
+        services.AddLogging(builder => builder.AddLambdaLogger());
         services.AddInfrastructure();
+        services.AddTransient<UploadImageUseCase>();
+
+        services.AddSingleton<Function>();
 
         ServiceProvider sp = services.BuildServiceProvider();
         Func<APIGatewayProxyRequest, ILambdaContext, Task<APIGatewayProxyResponse>> handler = sp.GetRequiredService<Function>().FunctionHandler;
@@ -45,7 +50,9 @@ public partial class Function(ILogger<Function> logger, ProcessImageUseCase proc
 
         try
         {
-            ImageUploadRequest? uploadRequest = JsonSerializer.Deserialize<ImageUploadRequest>(request.Body, LambdaFunctionJsonSerializerContext.Default.ImageUploadRequest);
+            UploadImageRequest? uploadRequest = JsonSerializer.Deserialize<UploadImageRequest>(
+                request.Body, 
+                LambdaFunctionJsonSerializerContext.Default.UploadImageRequest);
 
             if (uploadRequest == null || string.IsNullOrEmpty(uploadRequest.Base64Image))
             {
@@ -53,10 +60,10 @@ public partial class Function(ILogger<Function> logger, ProcessImageUseCase proc
                 return CreateResponse(HttpStatusCode.BadRequest, new ErrorResponse("Invalid payload or missing Base64 image data."), LambdaFunctionJsonSerializerContext.Default.ErrorResponse);
             }
 
-            ImageMetadata resultMetadata = await processImageUseCase.ExecuteAsync(uploadRequest);
-            SuccessResponse<ImageMetadata> successResponse = new("Image processed successfully!", resultMetadata);
+            ImageMetadata metadata = await uploadImageUseCase.ExecuteAsync(uploadRequest.Base64Image, uploadRequest.FileName, uploadRequest.ContentType);
+            UploadImageResponse responseBody = new(metadata.ImageId, metadata.S3Url, metadata.SizeInBytes, metadata.UploadDate);
 
-            return CreateResponse(HttpStatusCode.OK, successResponse, LambdaFunctionJsonSerializerContext.Default.SuccessResponseImageMetadata);
+            return CreateResponse(HttpStatusCode.OK, responseBody, LambdaFunctionJsonSerializerContext.Default.UploadImageResponse);
         }
         catch (Exception ex)
         {
@@ -88,8 +95,7 @@ public partial class Function(ILogger<Function> logger, ProcessImageUseCase proc
 [JsonSerializable(typeof(APIGatewayProxyRequest))]
 [JsonSerializable(typeof(APIGatewayProxyResponse))]
 [JsonSerializable(typeof(Dictionary<string, string>))]
-[JsonSerializable(typeof(ImageUploadRequest))]
-[JsonSerializable(typeof(ImageMetadata))]
+[JsonSerializable(typeof(UploadImageRequest))]
+[JsonSerializable(typeof(UploadImageResponse))]
 [JsonSerializable(typeof(ErrorResponse))]
-[JsonSerializable(typeof(SuccessResponse<ImageMetadata>))]
 public partial class LambdaFunctionJsonSerializerContext : JsonSerializerContext;
