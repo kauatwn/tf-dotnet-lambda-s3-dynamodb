@@ -98,20 +98,19 @@ The application code follows **Clean Architecture / Ports and Adapters** princip
 ```plaintext
 tf-dotnet-lambda-s3-dynamodb/
 ├── infra/
-│   ├── environments/dev/         # Environment-specific tfvars and main execution
-│   └── modules/                  # Reusable IaC Modules
-│       ├── api/                  # API Gateway resources
-│       ├── compute/              # Lambda, IAM Roles, and Policies
-│       └── storage/              # S3 and DynamoDB
-├── src/ImageProcessor.Lambda/
-│   ├── Core/                     # Interfaces and Use Cases
-│   ├── DTOs/                     # Request/Response contracts
-│   ├── Infrastructure/           # AWS SDK implementations (Adapters)
-│   ├── Models/                   # Domain entities
-│   └── Function.cs               # Lambda Entrypoint
+│   ├── environments/
+│   │   └── dev/
+│   └── modules/
+│       ├── api/                            # API Gateway resources
+│       ├── compute/                        # Lambda, IAM Roles, and Policies
+│       └── storage/                        # S3 and DynamoDB
+├── src/
+│   ├── ImageProcessor.Core/                # UseCases, Interfaces
+│   ├── ImageProcessor.Infrastructure/      # AWS SDK implementations (Adapters)
+│   └── ImageProcessor.Lambda.UploadImage/  # Lambda Entrypoint (Contracts, Function.cs)
 └── tests/
-    ├── ImageProcessor.UnitTests/         # Isolated Domain and Use Case tests via Moq
-    └── ImageProcessor.IntegrationTests/  # End-to-end Handler and DB testing via Testcontainers
+    ├── ImageProcessor.UnitTests/
+    └── ImageProcessor.IntegrationTests/
 ```
 
 ## Architecture & Design Principles
