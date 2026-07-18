@@ -7,8 +7,8 @@ namespace ImageProcessor.IntegrationTests.Abstractions;
 
 public class IntegrationTestFixture : IAsyncLifetime
 {
-    private const string TargetBucketName = "integration-test-bucket";
-    private const string TargetTableName = "ImageMetadata";
+    public const string TargetBucketName = "integration-test-bucket";
+    public const string TargetTableName = "ImageMetadata";
 
     public AmazonS3Client? S3Client { get; private set; }
     public AmazonDynamoDBClient? DynamoClient { get; private set; }
@@ -42,8 +42,8 @@ public class IntegrationTestFixture : IAsyncLifetime
         await DynamoClient.CreateTableAsync(new CreateTableRequest
         {
             TableName = TargetTableName,
-            AttributeDefinitions = [new AttributeDefinition("ImageId", ScalarAttributeType.S)],
-            KeySchema = [new KeySchemaElement("ImageId", KeyType.HASH)],
+            AttributeDefinitions = [new AttributeDefinition("imageId", ScalarAttributeType.S)],
+            KeySchema = [new KeySchemaElement("imageId", KeyType.HASH)],
             BillingMode = BillingMode.PAY_PER_REQUEST
         });
 
