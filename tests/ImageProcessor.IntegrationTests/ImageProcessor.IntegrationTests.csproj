@@ -29,7 +29,8 @@
     </ItemGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\..\src\ImageProcessor.Lambda\ImageProcessor.Lambda.csproj" />
+      <ProjectReference Include="..\..\src\ImageProcessor.Infrastructure\ImageProcessor.Infrastructure.csproj" />
+      <ProjectReference Include="..\..\src\ImageProcessor.Lambda.UploadImage\ImageProcessor.Lambda.UploadImage.csproj" />
     </ItemGroup>
 
 </Project>

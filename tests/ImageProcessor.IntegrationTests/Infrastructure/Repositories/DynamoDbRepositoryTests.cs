@@ -1,18 +1,17 @@
 using Amazon.DynamoDBv2;
 using Amazon.DynamoDBv2.Model;
-using ImageProcessor.IntegrationTests.Abstractions; 
-using ImageProcessor.Lambda.Infrastructure;
-using ImageProcessor.Lambda.Models;
+using ImageProcessor.Core.Models;
+using ImageProcessor.Infrastructure.Repositories;
+using ImageProcessor.IntegrationTests.Abstractions;
 
-namespace ImageProcessor.IntegrationTests.Infrastructure;
+namespace ImageProcessor.IntegrationTests.Infrastructure.Repositories;
 
 [Collection(nameof(IntegrationTestCollection))]
 public class DynamoDbRepositoryTests
 {
-    private readonly DynamoDbRepository _sut;
     private readonly AmazonDynamoDBClient _dynamoClient;
-    
-    private const string DbTableName = nameof(ImageMetadata);
+
+    private readonly DynamoDbRepository _sut;
 
     public DynamoDbRepositoryTests(IntegrationTestFixture fixture)
     {
@@ -32,7 +31,7 @@ public class DynamoDbRepositoryTests
         ImageMetadata metadata = new(
             ImageId: Guid.NewGuid().ToString(),
             FileName: "test-image.jpg",
-            SizeInBytes: 1024L, 
+            SizeInBytes: 1024L,
             S3Url: "https://s3.amazonaws.com/bucket/test-image.jpg",
             UploadDate: DateTime.UtcNow
         );
@@ -43,17 +42,17 @@ public class DynamoDbRepositoryTests
         // Assert
         GetItemRequest request = new()
         {
-            TableName = DbTableName, // Name configured in your Fixture
+            TableName = IntegrationTestFixture.TargetTableName,
             Key = new Dictionary<string, AttributeValue>
             {
-                { nameof(ImageMetadata.ImageId), new AttributeValue { S = metadata.ImageId } }
+                { "imageId", new AttributeValue { S = metadata.ImageId } }
             }
         };
 
         GetItemResponse? response = await _dynamoClient.GetItemAsync(request, TestContext.Current.CancellationToken);
 
         Assert.True(response.IsItemSet);
-        Assert.Equal(metadata.FileName, response.Item[nameof(ImageMetadata.FileName)].S);
-        Assert.Equal(metadata.S3Url, response.Item[nameof(ImageMetadata.S3Url)].S);
+        Assert.Equal(metadata.FileName, response.Item["fileName"].S);
+        Assert.Equal(metadata.S3Url, response.Item["s3Url"].S);
     }
 }
