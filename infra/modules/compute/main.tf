@@ -3,13 +3,17 @@ locals {
   # Maps AWS architecture to the .NET Runtime Identifier (RID)
   dotnet_rid = var.lambda_architecture == "arm64" ? "linux-arm64" : "linux-x64"
 
+  # Base directory variables using best practices (path.root) for deterministic paths
+  project_root = "${path.root}/../../.."
+  src_dir      = "${local.project_root}/src/ImageProcessor.Lambda.UploadImage"
+
   # Centralized path for the Lambda ZIP
-  lambda_zip_path = "${path.module}/../../../src/ImageProcessor.Lambda/bin/Release/net10.0/${local.dotnet_rid}/publish/ImageProcessor.Lambda.UploadImage.zip"
+  lambda_zip_path = "${local.src_dir}/bin/Release/net10.0/${local.dotnet_rid}/publish/ImageProcessor.Lambda.UploadImage.zip"
 
   # Deterministic hash based on source files (avoids non-deterministic ZIP hashes)
   source_hash = base64sha256(join("", [
-    for f in fileset("${path.module}/../../../src/ImageProcessor.Lambda", "**/*.{cs,csproj}") :
-    filesha1("${path.module}/../../../src/ImageProcessor.Lambda.UploadImage/${f}")
+    for f in fileset(local.src_dir, "**/*.{cs,csproj}") :
+    filesha1("${local.src_dir}/${f}")
   ]))
 }
 
@@ -80,15 +84,15 @@ resource "terraform_data" "lambda_build" {
   triggers_replace = {
     # Rebuilds whenever any .cs or .csproj file changes
     source_hash = sha1(join("", [
-      for f in fileset("${path.module}/../../../src/ImageProcessor.Lambda.UploadImage", "**/*.cs") :
-      filesha1("${path.module}/../../../src/ImageProcessor.Lambda.UploadImage/${f}")
+      for f in fileset(local.src_dir, "**/*.cs") :
+      filesha1("${local.src_dir}/${f}")
     ]))
-    csproj_hash = filesha1("${path.module}/../../../src/ImageProcessor.Lambda.UploadImage/ImageProcessor.Lambda.UploadImage.csproj")
+    csproj_hash = filesha1("${local.src_dir}/ImageProcessor.Lambda.UploadImage.csproj")
   }
 
   provisioner "local-exec" {
     command     = "dotnet lambda package --configuration Release --framework net10.0 --function-architecture ${var.lambda_architecture} --output-package bin/Release/net10.0/${local.dotnet_rid}/publish/ImageProcessor.Lambda.UploadImage.zip"
-    working_dir = "${path.module}/../../../src/ImageProcessor.Lambda.UploadImage"
+    working_dir = local.src_dir
   }
 }
 
