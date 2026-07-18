@@ -23,6 +23,7 @@
     <File Path="infra\modules\storage\outputs.tf" />
   </Folder>
   <Folder Name="/src/">
+    <Project Path="src/ImageProcessor.Core/ImageProcessor.Core.csproj" />
     <Project Path="src/ImageProcessor.Lambda/ImageProcessor.Lambda.csproj" />
   </Folder>
   <Folder Name="/tests/">
