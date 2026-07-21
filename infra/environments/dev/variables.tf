@@ -7,5 +7,5 @@ variable "localstack_endpoint" {
 variable "lambda_architecture" {
   type        = string
   description = "The architecture of the machine where the Lambda will run (x86_64 or arm64)"
-  default     = "x86_64"
+  default     = "arm64"
 }
