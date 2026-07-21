@@ -24,4 +24,9 @@
     <ItemGroup>
       <ProjectReference Include="..\ImageProcessor.Infrastructure\ImageProcessor.Infrastructure.csproj" />
     </ItemGroup>
+    <ItemGroup>
+      <Content Include="..\..\.dockerignore">
+        <Link>.dockerignore</Link>
+      </Content>
+    </ItemGroup>
 </Project>
