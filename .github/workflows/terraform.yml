@@ -16,15 +16,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
-      - name: Setup .NET SDK
-        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
-        with:
-          dotnet-version: "10.0.x"
-
-      - name: Setup Lambda Tools
-        run: |
-          dotnet tool install -g Amazon.Lambda.Tools
-
       - name: Start LocalStack
         uses: LocalStack/setup-localstack@7c8a0cb3405bc58be4c8f763f812aa000bc46303 # v0.3.2
         with:
@@ -40,6 +31,20 @@ jobs:
         run: terraform init -upgrade
         working-directory: infra/environments/dev
 
+      - name: Terraform Apply
+        run: |
+          terraform apply \
+            -target="module.compute.aws_ecr_repository.lambda_repo" \
+            -var="localstack_endpoint=${{ env.LOCALSTACK_ENDPOINT }}" \
+            -var="lambda_architecture=x86_64" \
+            -auto-approve
+        working-directory: infra/environments/dev
+
+      - name: Docker Build & Push to LocalStack ECR
+        run: |
+          docker build -t 127.0.0.1:4566/image-processor-lambda:latest -f src/ImageProcessor.Lambda.UploadImage/Dockerfile .
+          docker push 127.0.0.1:4566/image-processor-lambda:latest
+
       - name: Terraform Plan
         run: |
           terraform plan \
@@ -48,8 +53,8 @@ jobs:
             -out=tfplan
         working-directory: infra/environments/dev
 
-      - name: Terraform Apply
-        run: terraform apply tfplan
+      - name: Terraform Apply (Full Infrastructure)
+        run: terraform apply -auto-approve tfplan
         working-directory: infra/environments/dev
 
       - name: Run E2E Integration Test
