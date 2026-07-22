@@ -6,6 +6,7 @@ module "compute" {
   source = "../../modules/compute"
 
   lambda_architecture = var.lambda_architecture
+  image_tag           = var.image_tag
 
   # Injecting outputs from the Storage module
   bucket_name         = module.storage.bucket_name

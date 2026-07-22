@@ -17,3 +17,8 @@ variable "dynamodb_table_name" {
 variable "dynamodb_table_arn" {
   type = string
 }
+
+variable "image_tag" {
+  type        = string
+  description = "The Docker image tag to deploy (e.g., latest or Git SHA)"
+}
