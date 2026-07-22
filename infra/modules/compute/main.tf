@@ -1,10 +1,3 @@
-# Dynamic Paths Logic
-locals {
-  # Base directory variables using best practices (path.root) for deterministic paths
-  project_root = "${path.root}/../../.."
-  src_dir      = "${local.project_root}/src/ImageProcessor.Lambda.UploadImage"
-}
-
 # CloudWatch Log Group for Lambda
 resource "aws_cloudwatch_log_group" "lambda_log_group" {
   name              = "/aws/lambda/ImageProcessorLambdaUploadImage"
@@ -96,43 +89,15 @@ resource "aws_ecr_lifecycle_policy" "lambda_repo_policy" {
   })
 }
 
-# Build & Package - Native terraform_data
-# Automates the Docker build and push to the local ECR registry
-resource "terraform_data" "lambda_docker_push" {
-  triggers_replace = {
-    # Rebuilds whenever any .cs, .csproj or Dockerfile changes
-    source_hash = sha1(join("", [
-      for f in fileset(local.src_dir, "**/*.cs") :
-      filesha1("${local.src_dir}/${f}")
-    ]))
-    csproj_hash     = filesha1("${local.src_dir}/ImageProcessor.Lambda.UploadImage.csproj")
-    dockerfile_hash = filesha1("${local.src_dir}/Dockerfile")
-  }
-
-  provisioner "local-exec" {
-    # Executes the Docker build and push commands locally.
-    # Uses dynamic platform mapping (AWS x86_64 -> Docker amd64) to guarantee compatibility.
-    command = <<EOT
-      docker build --platform linux/${var.lambda_architecture == "arm64" ? "arm64" : "amd64"} -t ${aws_ecr_repository.lambda_repo.repository_url}:latest -f ${local.src_dir}/Dockerfile ${local.project_root}
-      docker push ${aws_ecr_repository.lambda_repo.repository_url}:latest
-    EOT
-  }
-
-  # Guarantees the ECR repository exists before attempting to build/push
-  depends_on = [
-    aws_ecr_repository.lambda_repo
-  ]
-}
-
 # AWS Lambda Function (Container Image)
 resource "aws_lambda_function" "image_processor_lambda_upload_image" {
   function_name = "ImageProcessorLambdaUploadImage"
   role          = aws_iam_role.lambda_execution_role.arn
   architectures = [var.lambda_architecture]
 
-  # Container specific configurations
+  # Container specific configurations using dynamic image tags from CI/CD
   package_type = "Image"
-  image_uri    = "${aws_ecr_repository.lambda_repo.repository_url}:latest"
+  image_uri    = "${aws_ecr_repository.lambda_repo.repository_url}:${var.image_tag}"
 
   # Performance configurations explicitly defined
   memory_size = 512
@@ -145,9 +110,7 @@ resource "aws_lambda_function" "image_processor_lambda_upload_image" {
     }
   }
 
-  # Forces Terraform to wait for the Docker image to be pushed before creating the Lambda
   depends_on = [
-    aws_cloudwatch_log_group.lambda_log_group,
-    terraform_data.lambda_docker_push
+    aws_cloudwatch_log_group.lambda_log_group
   ]
 }
