@@ -41,9 +41,10 @@ jobs:
         working-directory: infra/environments/dev
 
       - name: Docker Build & Push to LocalStack ECR
-        run: |
-          docker build -t 127.0.0.1:4566/image-processor-lambda:latest -f src/ImageProcessor.Lambda.UploadImage/Dockerfile .
-          docker push 127.0.0.1:4566/image-processor-lambda:latest
+          run: |
+            IMAGE_URI="000000000000.dkr.ecr.us-east-1.localhost.localstack.cloud:4566/image-processor-lambda:latest"
+            docker build --platform linux/amd64 -t $IMAGE_URI -f src/ImageProcessor.Lambda.UploadImage/Dockerfile .
+            docker push $IMAGE_URI
 
       - name: Terraform Plan
         run: |
