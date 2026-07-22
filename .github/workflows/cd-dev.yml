@@ -1,29 +1,27 @@
-name: Serverless CI - LocalStack Integration
+name: LocalStack Deployment (Dev)
 
 on:
-  push:
-    branches: ["main"]
-  pull_request:
-    branches: ["main"]
+  workflow_run:
+    workflows: ["Continuous Integration"]
+    types:
+      - completed
+    branches:
+      - main
 
 jobs:
-  build-and-test:
+  deploy-infra:
+    name: Provision Infrastructure
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-24.04
     env:
       LOCALSTACK_ENDPOINT: "http://127.0.0.1:4566"
+      IMAGE_TAG: ${{ github.event.workflow_run.head_sha }}
 
     steps:
       - name: Checkout code
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-
-      - name: Setup .NET SDK
-        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
-          dotnet-version: "10.0.x"
-
-      - name: Setup Lambda Tools
-        run: |
-          dotnet tool install -g Amazon.Lambda.Tools
+          ref: ${{ github.event.workflow_run.head_sha }}
 
       - name: Start LocalStack
         uses: LocalStack/setup-localstack@7c8a0cb3405bc58be4c8f763f812aa000bc46303 # v0.3.2
@@ -40,31 +38,49 @@ jobs:
         run: terraform init -upgrade
         working-directory: infra/environments/dev
 
-      - name: Terraform Plan
+      - name: Terraform Apply (Target ECR)
         run: |
-          terraform plan \
+          terraform apply \
+            -target="module.compute.aws_ecr_repository.lambda_repo" \
             -var="localstack_endpoint=${{ env.LOCALSTACK_ENDPOINT }}" \
-            -var="lambda_architecture=x86_64" \
-            -out=tfplan
+            -auto-approve
         working-directory: infra/environments/dev
 
-      - name: Terraform Apply
-        run: terraform apply tfplan
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+        with:
+          # Allows Docker Buildx to access the localhost network (LocalStack)
+          driver-opts: network=host
+
+      - name: Build and Push Docker Image
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: .
+          file: src/ImageProcessor.Lambda.UploadImage/Dockerfile
+          push: true
+          tags: 000000000000.dkr.ecr.us-east-1.localhost.localstack.cloud:4566/image-processor-lambda:${{ env.IMAGE_TAG }}
+          platforms: linux/amd64
+          # Imports the cache using the exact same scope created by the CI workflow
+          cache-from: type=gha,scope=lambda-aot-build
+          # Note: cache-to is removed because CI already built and saved the layers
+
+      - name: Terraform Apply (Full Infrastructure)
+        run: |
+          terraform apply \
+            -var="localstack_endpoint=${{ env.LOCALSTACK_ENDPOINT }}" \
+            -var="lambda_architecture=x86_64" \
+            -var="image_tag=${{ env.IMAGE_TAG }}" \
+            -auto-approve
         working-directory: infra/environments/dev
 
       - name: Run E2E Integration Test
         run: |
           API_ID=$(terraform output -raw api_id)
-          echo "Using API ID: $API_ID"
           LOCALSTACK_URL="$LOCALSTACK_ENDPOINT/_aws/execute-api/$API_ID/local/images"
-          echo "LocalStack URL: $LOCALSTACK_URL"
 
-          # Trigger the request
           RESPONSE=$(curl -s -X POST "$LOCALSTACK_URL" \
             -H "Content-Type: application/json" \
             -d '{"FileName": "github_action.png", "ContentType": "image/png", "Base64Image": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII="}')
-
-          echo "API Response: $RESPONSE"
 
           if [[ "$RESPONSE" == *"ImageId"* ]]; then
             echo "SUCCESS: Lambda processed the image and saved metadata."
@@ -74,7 +90,3 @@ jobs:
             exit 1
           fi
         working-directory: infra/environments/dev
-
-      - name: Show LocalStack logs
-        if: always()
-        run: localstack logs | tail -50

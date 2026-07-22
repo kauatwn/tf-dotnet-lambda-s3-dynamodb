@@ -9,3 +9,9 @@ variable "lambda_architecture" {
   description = "The architecture of the machine where the Lambda will run (x86_64 or arm64)"
   default     = "x86_64"
 }
+
+variable "image_tag" {
+  type        = string
+  description = "The Docker image tag to deploy"
+  default     = "latest"
+}
