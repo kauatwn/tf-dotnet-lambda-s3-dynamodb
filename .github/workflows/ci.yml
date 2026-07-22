@@ -45,5 +45,6 @@ jobs:
           push: false
           tags: image-processor-lambda:${{ env.IMAGE_TAG }}
           platforms: linux/amd64
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          # Defines a shared scope so the CD workflow can find this cache
+          cache-from: type=gha,scope=lambda-aot-build
+          cache-to: type=gha,mode=max,scope=lambda-aot-build

@@ -60,8 +60,9 @@ jobs:
           push: true
           tags: 000000000000.dkr.ecr.us-east-1.localhost.localstack.cloud:4566/image-processor-lambda:${{ env.IMAGE_TAG }}
           platforms: linux/amd64
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          # Imports the cache using the exact same scope created by the CI workflow
+          cache-from: type=gha,scope=lambda-aot-build
+          # Note: cache-to is removed because CI already built and saved the layers
 
       - name: Terraform Apply (Full Infrastructure)
         run: |
