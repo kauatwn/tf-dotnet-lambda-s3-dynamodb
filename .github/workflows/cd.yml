@@ -2,27 +2,20 @@ name: LocalStack Deployment (Dev)
 
 on:
   workflow_dispatch:
-  workflow_run:
-    workflows: ["Continuous Integration"]
-    types:
-      - completed
-    branches:
-      - main
+  push:
+    branches: ["main"]
 
 jobs:
   deploy-infra:
     name: Provision Infrastructure
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-24.04
     env:
       LOCALSTACK_ENDPOINT: "http://127.0.0.1:4566"
-      IMAGE_TAG: ${{ github.event.workflow_run.head_sha }}
+      IMAGE_TAG: ${{ github.sha }}
 
     steps:
       - name: Checkout code
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-        with:
-          ref: ${{ github.event.workflow_run.head_sha }}
 
       - name: Start LocalStack
         uses: LocalStack/setup-localstack@7c8a0cb3405bc58be4c8f763f812aa000bc46303 # v0.3.2
@@ -86,7 +79,7 @@ jobs:
 
           # Correção fundamental: Usar o stage "local" ao invés de "\$default"
           LOCALSTACK_URL="$LOCALSTACK_ENDPOINT/_aws/execute-api/$API_ID/local/images"
-          
+
           RESPONSE=$(curl -sS -w "\n%{http_code}" -X POST "$LOCALSTACK_URL" \
             -H "Content-Type: application/json" \
             -d '{"FileName":"github_action.png","ContentType":"image/png","Base64Image":"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII="}')
