@@ -84,7 +84,9 @@ jobs:
         run: |
           API_ID=$(terraform output -raw api_id)
 
-          LOCALSTACK_URL="$LOCALSTACK_ENDPOINT/_aws/execute-api/$API_ID/\$default/images"
+          # Correção fundamental: Usar o stage "local" ao invés de "\$default"
+          LOCALSTACK_URL="$LOCALSTACK_ENDPOINT/_aws/execute-api/$API_ID/local/images"
+          
           RESPONSE=$(curl -sS -w "\n%{http_code}" -X POST "$LOCALSTACK_URL" \
             -H "Content-Type: application/json" \
             -d '{"FileName":"github_action.png","ContentType":"image/png","Base64Image":"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII="}')
