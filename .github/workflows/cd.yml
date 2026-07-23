@@ -81,17 +81,21 @@ jobs:
         run: sleep 5
 
       - name: Run E2E Smoke Test (curl)
-        # Executes a real HTTP POST request to ensure network routing and
-        # IAM permissions are fully operational.
         run: |
           API_ID=$(terraform output -raw api_id)
-          LOCALSTACK_URL="$LOCALSTACK_ENDPOINT/_aws/execute-api/$API_ID/local/images"
 
-          RESPONSE=$(curl -s -X POST "$LOCALSTACK_URL" \
+          LOCALSTACK_URL="$LOCALSTACK_ENDPOINT/_aws/execute-api/$API_ID/\$default/images"
+          RESPONSE=$(curl -sS -w "\n%{http_code}" -X POST "$LOCALSTACK_URL" \
             -H "Content-Type: application/json" \
-            -d '{"FileName": "github_action.png", "ContentType": "image/png", "Base64Image": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII="}')
+            -d '{"FileName":"github_action.png","ContentType":"image/png","Base64Image":"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII="}')
 
-          if [[ "$RESPONSE" == *"ImageId"* ]]; then
+          BODY=$(echo "$RESPONSE" | head -n -1)
+          STATUS=$(echo "$RESPONSE" | tail -n1)
+
+          echo "HTTP $STATUS"
+          echo "Body: $BODY"
+
+          if [[ "$STATUS" == "200" && "$BODY" == *"ImageId"* ]]; then
             echo "SUCCESS: Lambda processed the image and saved metadata."
             exit 0
           else
