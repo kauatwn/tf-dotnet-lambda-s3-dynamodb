@@ -1,4 +1,4 @@
-﻿FROM public.ecr.aws/lambda/provided:al2023 AS base
+﻿FROM mcr.microsoft.com/dotnet/runtime-deps:10.0-noble AS base
 WORKDIR /var/task
 
 # Uses the official .NET 10 AOT image (Ubuntu 24.04 Noble).
@@ -33,4 +33,4 @@ RUN if [ "$TARGETARCH" = "amd64" ]; then \
 FROM base AS final
 WORKDIR /var/task
 COPY --from=build /app/publish .
-CMD ["bootstrap"]
+CMD ["./bootstrap"]
